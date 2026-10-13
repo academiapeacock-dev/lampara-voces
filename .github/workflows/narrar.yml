@@ -1,0 +1,49 @@
+# Narra con voces naturales los capítulos nuevos (o cambiados) de Lámpara.
+# Cada hora revisa https://lampara-biblia.vercel.app; si algo falta, lo narra en macOS (afconvert) y lo sube.
+# GitHub Pages publica los audios en https://academiapeacock-dev.github.io/lampara-voces/
+name: Narrar capítulos
+
+on:
+  schedule:
+    - cron: '50 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: narrar
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    outputs:
+      pendientes: ${{ steps.r.outputs.pendientes }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: r
+        run: python3 narrar.py --revisar
+
+  narrar:
+    needs: revisar
+    if: needs.revisar.outputs.pendientes != '0'
+    runs-on: macos-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install edge-tts==7.2.8
+      - run: python3 narrar.py --hilos 4
+      - name: Guardar audios
+        if: always()
+        run: |
+          git config user.name "Lámpara (robot)"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A t muestra indice.json andrew ava dalia jorge 2>/dev/null || git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Narra capítulos nuevos"
+          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
+          exit 1
