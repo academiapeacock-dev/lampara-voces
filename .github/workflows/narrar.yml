@@ -1,11 +1,11 @@
 # Narra con voces naturales los capítulos nuevos (o cambiados) de Lámpara.
-# Cada hora revisa https://lampara-biblia.vercel.app; si algo falta, lo narra en macOS (afconvert) y lo sube.
+# Cada 10 minutos revisa https://lampara-biblia.vercel.app; si algo falta, lo narra en macOS (afconvert) y lo sube.
 # GitHub Pages publica los audios en https://academiapeacock-dev.github.io/lampara-voces/
 name: Narrar capítulos
 
 on:
   schedule:
-    - cron: '50 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 concurrency:

@@ -11,7 +11,7 @@ Se publican con GitHub Pages en https://academiapeacock-dev.github.io/lampara-vo
 
 ## Cómo se actualiza
 
-El robot `.github/workflows/narrar.yml` revisa la página cada hora. Si hay un capítulo nuevo, o si cambió el texto
+El robot `.github/workflows/narrar.yml` revisa la página cada 10 minutos. Si hay un capítulo nuevo, o si cambió el texto
 de uno ya narrado, lo narra con `narrar.py` (voces de Microsoft Edge vía `edge-tts`) y sube los audios.
 Para narrar ya mismo: pestaña **Actions** → **Narrar capítulos** → **Run workflow**.
 
