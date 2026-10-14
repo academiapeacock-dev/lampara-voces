@@ -47,3 +47,26 @@ jobs:
           git commit -m "Narra capítulos nuevos"
           for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
           exit 1
+
+  narrar_intel:  # plan B: si GitHub no consiguió una Mac nueva (saturadas), lo mismo en una Mac Intel
+    needs: [revisar, narrar]
+    if: always() && needs.revisar.outputs.pendientes != '0' && needs.narrar.result == 'cancelled'
+    runs-on: macos-15-intel
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install edge-tts==7.2.8
+      - run: python3 narrar.py --hilos 4
+      - name: Guardar audios
+        if: always()
+        run: |
+          git config user.name "Lámpara (robot)"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A t muestra indice.json andrew ava dalia jorge 2>/dev/null || git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Narra capítulos nuevos"
+          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
+          exit 1
