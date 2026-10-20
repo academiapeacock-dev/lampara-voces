@@ -11,16 +11,18 @@ resalta la frase que se está oyendo. Si se cambia esa función, hay que cambiar
 
 Uso: python3 narrar.py [--solo genesis-1,mateo-6] [--datos carpeta/con/chapters.json] [--revisar]
      --revisar solo cuenta lo que falta (y lo deja en $GITHUB_OUTPUT como pendientes=N).
-Necesita edge-tts y afconvert (macOS).
+Necesita edge-tts 7.3.1 (o más nueva) y afconvert (macOS).
 """
 import argparse, asyncio, hashlib, json, os, re, subprocess, sys, tempfile, urllib.request
 
 try:
-    import edge_tts
+    import edge_tts  # 7.3.1 o más nueva: usa el pase "v2" que Microsoft pide desde octubre de 2026
     import edge_tts.communicate
-    # Desde octubre de 2026 Microsoft solo atiende la narración en este servidor (arreglo de rany2/edge-tts#491).
-    edge_tts.communicate.WSS_URL = ('wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1'
-                                    '?Ocp-Apim-Subscription-Key=' + edge_tts.constants.TRUSTED_CLIENT_TOKEN)
+    # Microsoft tiene dos servidores de narración y a veces uno rechaza (403/429) según el país o la versión:
+    # cada reintento usa el otro.
+    SERVIDORES = [edge_tts.communicate.WSS_URL,
+                  'wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1'
+                  '?Ocp-Apim-Subscription-Key=' + edge_tts.constants.TRUSTED_CLIENT_TOKEN]
 except ImportError:  # --revisar no lo necesita
     edge_tts = None
 
@@ -200,6 +202,7 @@ async def main():
     async def uno(cid, v, segs):
         async with sem:
             for intento in range(4):
+                edge_tts.communicate.WSS_URL = SERVIDORES[intento % 2]
                 try:
                     r, faltan = await narrar(segs, v, os.path.join(AQUI, v, cid + '.m4a'))
                     fichas[cid][1]['v'][v] = r
@@ -209,8 +212,8 @@ async def main():
                     print(f'  {cid} {v}: {r["d"]:.0f} s, {len(segs)} frases' + (f', {faltan} sin alinear' if faltan else ''), flush=True)
                     return
                 except Exception as e:  # la conexión con Microsoft falla a veces: reintentar
-                    err = e
-                    await asyncio.sleep(5 * (intento + 1))
+                    err = e  # si pide esperar (429, demasiadas solicitudes), esperar más
+                    await asyncio.sleep((30 if '429' in str(e) else 5) * (intento + 1))
             errores.append(f'{cid} {v}: {err}')
             print(f'  ERROR {cid} {v}: {err}', flush=True)
 
