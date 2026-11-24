@@ -5,11 +5,15 @@ Para cada capítulo y cada voz deja:
   <voz>/<id>.m4a   audio (HE-AAC 24 kbps, mono)
   t/<id>.json      {"h": huella del texto, "seg": [frases tal como las muestra la página],
                     "v": {voz: {"d": duración, "s": [segundo en que empieza cada frase]}}}
+  <voz>/<id>-x.m4a y t/<id>-x.json   lo mismo, solo para la «Idea central» y la «Oración final» que se
+                    escribieron aparte (extras.json → idea/oracion) en los capítulos que no las traían.
+                    Es un audio corto aparte para no tener que narrar otra vez el capítulo entero: la página
+                    lo pone después del audio del capítulo.
 
 Las frases salen igual que en setupSpeech() de index.html (mismo orden y mismos cortes), así la página
 resalta la frase que se está oyendo. Si se cambia esa función, hay que cambiar también items() y frases().
 
-Uso: python3 narrar.py [--solo genesis-1,mateo-6] [--datos carpeta/con/chapters.json] [--revisar]
+Uso: python3 narrar.py [--solo genesis-1,mateo-6] [--datos carpeta/con/chapters.json] [--revisar] [--solo-extras]
      --revisar solo cuenta lo que falta (y lo deja en $GITHUB_OUTPUT como pendientes=N).
 Necesita edge-tts 7.3.1 (o más nueva) y afconvert (macOS).
 """
@@ -82,6 +86,20 @@ def items(c, ex):
                 break
     if q:
         out.append('“' + re.sub(r'^[“"]|[”"]$', '', q['t']) + '”')
+    return out
+
+
+def items_x(c, ex):
+    """Textos [data-say] de la «Idea central» y la «Oración final» agregadas (como las pinta renderChapter)."""
+    ex = ex or {}
+    if not (ex.get('idea') or ex.get('oracion')):
+        return []
+    if any(re.search(r'oraci[oó]n final', s.get('h') or '', re.I) for s in c['sections']):
+        return []
+    out = []
+    for titulo, clave in (('Idea central', 'idea'), ('Oración final', 'oracion')):
+        if ex.get(clave):
+            out += [titulo, ex[clave]]
     return out
 
 
@@ -174,15 +192,24 @@ async def main():
     ap.add_argument('--datos', default='')
     ap.add_argument('--hilos', type=int, default=4)
     ap.add_argument('--revisar', action='store_true')
+    ap.add_argument('--solo-extras', action='store_true', help='narrar solo los audios cortos de idea central y oración final')
     a = ap.parse_args()
     caps = cargar(a.datos, 'chapters.json')
     extras = cargar(a.datos, 'extras.json')
     solo = set(filter(None, a.solo.split(',')))
     trabajos, fichas = [], {}
+    lista = []
     for c in caps:
         if solo and c['id'] not in solo:
             continue
-        segs = frases(items(c, extras.get(c['id'])))
+        lista.append((c['id'], frases(items(c, extras.get(c['id'])))))
+        x = frases(items_x(c, extras.get(c['id'])))
+        if x:
+            lista.append((c['id'] + '-x', x))   # audio corto aparte (idea central y oración final)
+    if a.solo_extras:
+        lista = [x for x in lista if x[0].endswith('-x')]
+    for cid, segs in lista:
+        c = {'id': cid}
         huella = hashlib.sha1(json.dumps([VERSION, [hablar(s) for s in segs]], ensure_ascii=False).encode()).hexdigest()[:12]
         ruta = os.path.join(AQUI, 't', c['id'] + '.json')
         viejo = json.load(open(ruta)) if os.path.exists(ruta) else {}
@@ -221,6 +248,8 @@ async def main():
     # Índice con lo que ya está narrado completo (las 4 voces)
     listos = {}
     for f in sorted(os.listdir(os.path.join(AQUI, 't'))) if os.path.isdir(os.path.join(AQUI, 't')) else []:
+        if f.endswith('-x.json'):
+            continue
         d = json.load(open(os.path.join(AQUI, 't', f)))
         if all(v in d['v'] for v in VOCES):
             listos[f[:-5]] = d['h']
